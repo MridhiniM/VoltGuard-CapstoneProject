@@ -1,0 +1,279 @@
+[
+  {
+    "id": "vg_tab",
+    "type": "tab",
+    "label": "VoltGuard SIM \u2192 ML \u2192 Dashboard"
+  },
+  {
+    "id": "tick",
+    "type": "inject",
+    "z": "vg_tab",
+    "name": "Poll simulated ESP32 every 2 seconds",
+    "props": [
+      {
+        "p": "payload"
+      }
+    ],
+    "repeat": "2",
+    "once": true,
+    "onceDelay": 1,
+    "payload": "",
+    "payloadType": "str",
+    "x": 180,
+    "y": 100,
+    "wires": [
+      [
+        "raw"
+      ]
+    ]
+  },
+  {
+    "id": "raw",
+    "type": "http request",
+    "z": "vg_tab",
+    "name": "Simulator raw telemetry",
+    "method": "GET",
+    "ret": "obj",
+    "paytoqs": "ignore",
+    "url": "http://127.0.0.1:5001/api/demo/raw",
+    "x": 410,
+    "y": 100,
+    "wires": [
+      [
+        "prep"
+      ]
+    ]
+  },
+  {
+    "id": "prep",
+    "type": "function",
+    "z": "vg_tab",
+    "name": "Validate and forward to ML",
+    "func": "if(flow.get('input_mode')==='hardware')return null; const p=msg.payload; if(!p || !['voltage','current','temperature'].every(k=>Number.isFinite(p[k]))) {node.warn('Invalid simulator reading');return null;} msg.payload=p; msg.headers={'Content-Type':'application/json'}; return msg;",
+    "outputs": 1,
+    "x": 660,
+    "y": 100,
+    "wires": [
+      [
+        "ml"
+      ]
+    ]
+  },
+  {
+    "id": "ml",
+    "type": "http request",
+    "z": "vg_tab",
+    "name": "Flask Random Forest + hard rules",
+    "method": "POST",
+    "ret": "obj",
+    "paytoqs": "ignore",
+    "url": "http://127.0.0.1:5001/api/edge/predict",
+    "x": 930,
+    "y": 100,
+    "wires": [
+      [
+        "save"
+      ]
+    ]
+  },
+  {
+    "id": "save",
+    "type": "function",
+    "z": "vg_tab",
+    "name": "Publish latest processed reading",
+    "func": "if(msg.statusCode!==200 || !msg.payload || !msg.payload.prediction){node.warn('ML gateway returned error');return null;} const p=msg.payload; const mode=flow.get('input_mode')||'simulation';if((mode==='hardware')!==(!p.sim))return null; p.pipeline=mode==='hardware'?'ESP32 \u2192 MQTT \u2192 NODE-RED \u2192 FLASK ML \u2192 NODE-RED':'SIMULATOR \u2192 NODE-RED \u2192 FLASK ML \u2192 NODE-RED';p.input_mode=mode;p.received_at=new Date().toISOString();flow.set('latest',p);if(mode==='hardware')flow.set('hardware_at',p.received_at);return msg;",
+    "outputs": 1,
+    "x": 1200,
+    "y": 100,
+    "wires": [
+      [
+        "debug"
+      ]
+    ]
+  },
+  {
+    "id": "debug",
+    "type": "debug",
+    "z": "vg_tab",
+    "name": "ML processed reading",
+    "active": false,
+    "complete": "payload",
+    "x": 1450,
+    "y": 100,
+    "wires": []
+  },
+  {
+    "id": "http",
+    "type": "http in",
+    "z": "vg_tab",
+    "name": "Dashboard latest reading",
+    "url": "/api/readings/latest",
+    "method": "get",
+    "x": 200,
+    "y": 240,
+    "wires": [
+      [
+        "latest"
+      ]
+    ]
+  },
+  {
+    "id": "latest",
+    "type": "function",
+    "z": "vg_tab",
+    "name": "Latest from Node-RED",
+    "func": "msg.headers={'Access-Control-Allow-Origin':'*','Cache-Control':'no-store'};const p=flow.get('latest');if(!p){msg.statusCode=503;msg.payload={error:'waiting for first processed reading',mode:flow.get('input_mode')||'simulation'};return msg;}if(Date.now()-Date.parse(p.received_at||p.timestamp)>12000){msg.statusCode=503;msg.payload={error:'stale telemetry - sensor input disconnected',mode:flow.get('input_mode')||'simulation'};return msg;}msg.payload=p;return msg;",
+    "outputs": 1,
+    "x": 470,
+    "y": 240,
+    "wires": [
+      [
+        "response"
+      ]
+    ]
+  },
+  {
+    "id": "response",
+    "type": "http response",
+    "z": "vg_tab",
+    "name": "Dashboard JSON",
+    "x": 720,
+    "y": 240,
+    "wires": []
+  },
+  {
+    "id": "err",
+    "type": "catch",
+    "z": "vg_tab",
+    "name": "Pipeline errors",
+    "scope": [],
+    "uncaught": false,
+    "x": 200,
+    "y": 330,
+    "wires": [
+      [
+        "errdbg"
+      ]
+    ]
+  },
+  {
+    "id": "errdbg",
+    "type": "debug",
+    "z": "vg_tab",
+    "name": "Pipeline errors",
+    "active": true,
+    "complete": "true",
+    "x": 440,
+    "y": 330,
+    "wires": []
+  },
+  {
+    "id": "vg_mqtt_broker",
+    "type": "mqtt-broker",
+    "name": "VoltGuard local broker",
+    "broker": "127.0.0.1",
+    "port": "1883",
+    "clientid": "voltguard-nodered",
+    "autoConnect": true,
+    "usetls": false,
+    "protocolVersion": "4",
+    "keepalive": "60",
+    "cleansession": true
+  },
+  {
+    "id": "vg_mqtt_in",
+    "type": "mqtt in",
+    "z": "vg_tab",
+    "name": "ESP32 actual telemetry",
+    "topic": "voltguard/telemetry",
+    "qos": "0",
+    "datatype": "json",
+    "broker": "vg_mqtt_broker",
+    "nl": false,
+    "rap": true,
+    "rh": 0,
+    "inputs": 0,
+    "x": 185,
+    "y": 410,
+    "wires": [
+      [
+        "vg_hw_gate"
+      ]
+    ]
+  },
+  {
+    "id": "vg_hw_gate",
+    "type": "function",
+    "z": "vg_tab",
+    "name": "Hardware mode + sensor validation",
+    "func": "if(flow.get('input_mode')!=='hardware')return null; const p=msg.payload; if(!p || p.sensor_ok!==true || !['voltage','current','temperature'].every(k=>typeof p[k]==='number' && Number.isFinite(p[k]))) {node.warn('ESP32 invalid sensor reading');return null;} if(p.voltage<0||p.voltage>300||p.current<0||p.current>100||p.temperature< -55||p.temperature>125){node.warn('ESP32 out-of-range telemetry');return null;} msg.payload={voltage:p.voltage,current:p.current,temperature:p.temperature,power:p.power,source:'ESP32',sim:false,scenario:'hardware',sensor_ok:true,hardware_relay:p.relay,trip_reason:p.trip_reason,edge_label:p.edge_label,timestamp:new Date().toISOString()};msg.headers={'Content-Type':'application/json'};return msg;",
+    "outputs": 1,
+    "x": 465,
+    "y": 410,
+    "wires": [
+      [
+        "ml"
+      ]
+    ]
+  },
+  {
+    "id": "vg_mode_http",
+    "type": "http in",
+    "z": "vg_tab",
+    "name": "Read input mode",
+    "url": "/api/input/mode",
+    "method": "get",
+    "x": 170,
+    "y": 510,
+    "wires": [
+      [
+        "vg_mode_reply"
+      ]
+    ]
+  },
+  {
+    "id": "vg_mode_reply",
+    "type": "function",
+    "z": "vg_tab",
+    "name": "Mode and hardware status",
+    "func": "msg.headers={'Access-Control-Allow-Origin':'*','Cache-Control-Allow-Methods':'GET, POST, OPTIONS','Access-Control-Allow-Headers':'Content-Type','Cache-Control':'no-store'}; msg.payload={mode:flow.get('input_mode')||'simulation',last_hardware_at:flow.get('hardware_at')||null};return msg;",
+    "outputs": 1,
+    "x": 440,
+    "y": 510,
+    "wires": [
+      [
+        "response"
+      ]
+    ]
+  },
+  {
+    "id": "vg_mode_post",
+    "type": "http in",
+    "z": "vg_tab",
+    "name": "Set input mode",
+    "url": "/api/input/mode",
+    "method": "post",
+    "x": 175,
+    "y": 570,
+    "wires": [
+      [
+        "vg_mode_set"
+      ]
+    ]
+  },
+  {
+    "id": "vg_mode_set",
+    "type": "function",
+    "z": "vg_tab",
+    "name": "Select simulation or hardware",
+    "func": "const mode=msg.payload && msg.payload.mode;msg.headers={'Access-Control-Allow-Origin':'*','Cache-Control-Allow-Headers':'Content-Type','Cache-Control-Allow-Methods':'GET, POST, OPTIONS','Cache-Control':'no-store'};if(!['simulation','hardware'].includes(mode)){msg.statusCode=400;msg.payload={error:'mode must be simulation or hardware'};return msg;}flow.set('input_mode',mode);flow.set('latest',null);msg.payload={ok:true,mode:mode,notice:'Mode changed. Awaiting fresh readings.'};return msg;",
+    "outputs": 1,
+    "x": 475,
+    "y": 570,
+    "wires": [
+      [
+        "response"
+      ]
+    ]
+  }
+]

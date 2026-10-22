@@ -1,0 +1,260 @@
+[
+ {
+  "id": "tab1",
+  "type": "tab",
+  "label": "VoltGuard"
+ },
+ {
+  "id": "mqttb",
+  "type": "mqtt-broker",
+  "name": "Mosquitto (laptop)",
+  "broker": "localhost",
+  "port": "1883",
+  "clientid": "nodered-voltguard",
+  "autoConnect": true,
+  "usetls": false,
+  "protocolVersion": "4",
+  "keepalive": "60",
+  "cleansession": true
+ },
+ {
+  "id": "in1",
+  "type": "mqtt in",
+  "z": "tab1",
+  "name": "ESP32 telemetry",
+  "topic": "voltguard/telemetry",
+  "qos": "0",
+  "datatype": "json",
+  "broker": "mqttb",
+  "x": 140,
+  "y": 100,
+  "wires": [
+   [
+    "fd"
+   ]
+  ]
+ },
+ {
+  "id": "fd",
+  "type": "function",
+  "z": "tab1",
+  "name": "Fault Detection",
+  "func": "// Fault Detection: keep ESP32 data, ask laptop ML service.\nconst esp = msg.payload;\nif (typeof esp !== 'object' || typeof esp.voltage !== 'number') return null;   // drop junk\nmsg.esp = esp;\n// No ML while relay is tripped (load is off, current=0 would look like a fault) or sensors failed\nif (esp.relay === 'TRIPPED' || esp.sensor_ok === false) { msg.statusCode = 0; return [null, msg]; }\nmsg.payload = { voltage: esp.voltage, current: esp.current, power: esp.power, temperature: esp.temperature };\nmsg.headers = { 'Content-Type': 'application/json' };\nreturn [msg, null];",
+  "outputs": 2,
+  "x": 350,
+  "y": 100,
+  "wires": [
+   [
+    "ml"
+   ],
+   [
+    "fuse"
+   ]
+  ]
+ },
+ {
+  "id": "ml",
+  "type": "http request",
+  "z": "tab1",
+  "name": "Laptop ML /predict",
+  "method": "POST",
+  "ret": "obj",
+  "paytoqs": "ignore",
+  "url": "http://localhost:5000/predict",
+  "x": 570,
+  "y": 80,
+  "wires": [
+   [
+    "fuse"
+   ]
+  ]
+ },
+ {
+  "id": "catch",
+  "type": "catch",
+  "z": "tab1",
+  "name": "ML service down",
+  "scope": [
+   "ml"
+  ],
+  "uncaught": false,
+  "x": 560,
+  "y": 160,
+  "wires": [
+   [
+    "fuse"
+   ]
+  ]
+ },
+ {
+  "id": "fuse",
+  "type": "function",
+  "z": "tab1",
+  "name": "Fuse + Decide",
+  "func": "// Fuse edge (ESP32) + laptop ML, decide TRIP, publish to dashboard.\nconst esp = msg.esp;\nconst ml  = (msg.statusCode === 200 && msg.payload && typeof msg.payload.label === 'string') ? msg.payload : null;\nconst isFault = l => !!l && !['normal', 'off', 'n/a'].includes(l);\nconst ML_CONF = 0.6;      // laptop ML must be this sure\nconst NEED = 3;           // points needed to trip (5 s per reading)\n\nlet label = 'normal', conf = null, source = 'laptop_ml';\nif (esp.relay === 'TRIPPED')      { label = 'tripped: ' + esp.trip_reason; conf = 1; source = 'esp32'; }\nelse if (esp.hard_rule)           { label = esp.hard_rule; conf = 1; source = 'hard_rule'; }\nelse if (ml && ml.label !== 'off') {\n    label = ml.label; conf = ml.confidence;\n    if (isFault(esp.edge_label) && esp.edge_label === ml.label) { source = 'edge+laptop agree'; conf = Math.max(conf, 0.9); }\n} else if (!ml)                   { label = esp.edge_label; source = 'edge_only (ML service down)'; }\n\n// Decision: both models flag a fault = 2 points, laptop ML alone (conf>=0.6) = 1 point,\n// edge alone while ML service is down = 0.5 point (6 readings, same as ESP32 offline rule), otherwise reset.\nlet score = flow.get('score') || 0;\nconst mlFault = ml && isFault(ml.label) && ml.confidence >= ML_CONF;\nconst both = ml && isFault(ml.label) && isFault(esp.edge_label);\nconst edgeOnly = !ml && isFault(esp.edge_label);\nscore = esp.relay === 'TRIPPED' ? 0 : (both ? score + 2 : mlFault ? score + 1 : edgeOnly ? score + 0.5 : 0);\nlet cmd = null;\nif (score >= NEED) { cmd = { payload: { cmd: 'TRIP', reason: label + ' (' + source + ')' } }; score = 0;\n                     node.warn('TRIP sent: ' + cmd.payload.reason); }\nflow.set('score', score);\n\nconst out = {\n    timestamp: new Date().toISOString(),\n    voltage: esp.voltage, current: esp.current, power: esp.power, temperature: esp.temperature,\n    relay: esp.relay, edge_label: esp.edge_label, ml_label: ml ? ml.label : null,\n    ml_probs: ml ? ml.probs : null, source, trip_score: score\n};\nif (!(ml && ml.label === 'off') && esp.edge_label !== 'off') out.prediction = { label, confidence: conf };\nflow.set('latest', out);\nreturn [{ payload: out }, cmd];",
+  "outputs": 2,
+  "x": 800,
+  "y": 100,
+  "wires": [
+   [
+    "ws",
+    "dbg"
+   ],
+   [
+    "cmd"
+   ]
+  ]
+ },
+ {
+  "id": "ws",
+  "type": "websocket out",
+  "z": "tab1",
+  "name": "/ws/readings",
+  "server": "wsl",
+  "x": 1030,
+  "y": 60,
+  "wires": []
+ },
+ {
+  "id": "wsl",
+  "type": "websocket-listener",
+  "path": "/ws/readings",
+  "wholemsg": "false"
+ },
+ {
+  "id": "dbg",
+  "type": "debug",
+  "z": "tab1",
+  "name": "fused",
+  "active": false,
+  "complete": "payload",
+  "x": 1010,
+  "y": 110,
+  "wires": []
+ },
+ {
+  "id": "cmd",
+  "type": "mqtt out",
+  "z": "tab1",
+  "name": "voltguard/cmd",
+  "topic": "voltguard/cmd",
+  "qos": "1",
+  "retain": "false",
+  "broker": "mqttb",
+  "x": 1030,
+  "y": 160,
+  "wires": []
+ },
+ {
+  "id": "hin",
+  "type": "http in",
+  "z": "tab1",
+  "name": "",
+  "url": "/api/readings/latest",
+  "method": "get",
+  "x": 160,
+  "y": 260,
+  "wires": [
+   [
+    "lat"
+   ]
+  ]
+ },
+ {
+  "id": "lat",
+  "type": "function",
+  "z": "tab1",
+  "name": "latest reading",
+  "func": "msg.payload = flow.get('latest') || {};\nreturn msg;",
+  "outputs": 1,
+  "x": 390,
+  "y": 260,
+  "wires": [
+   [
+    "hres"
+   ]
+  ]
+ },
+ {
+  "id": "hres",
+  "type": "http response",
+  "z": "tab1",
+  "name": "",
+  "statusCode": "",
+  "headers": {
+   "Access-Control-Allow-Origin": "*"
+  },
+  "x": 570,
+  "y": 260,
+  "wires": []
+ },
+ {
+  "id": "inj",
+  "type": "inject",
+  "z": "tab1",
+  "name": "RESET relay",
+  "props": [],
+  "repeat": "",
+  "once": false,
+  "x": 150,
+  "y": 340,
+  "wires": [
+   [
+    "rst"
+   ]
+  ]
+ },
+ {
+  "id": "rst",
+  "type": "function",
+  "z": "tab1",
+  "name": "reset",
+  "func": "flow.set('score', 0);\nreturn [{ payload: { cmd: 'RESET' } }, { payload: {} }];",
+  "outputs": 2,
+  "x": 330,
+  "y": 340,
+  "wires": [
+   [
+    "cmd"
+   ],
+   [
+    "mlreset"
+   ]
+  ]
+ },
+ {
+  "id": "mlreset",
+  "type": "http request",
+  "z": "tab1",
+  "name": "ML /reset",
+  "method": "POST",
+  "ret": "obj",
+  "paytoqs": "ignore",
+  "url": "http://localhost:5000/reset",
+  "x": 520,
+  "y": 360,
+  "wires": [
+   []
+  ]
+ },
+ {
+  "id": "injt",
+  "type": "inject",
+  "z": "tab1",
+  "name": "manual TRIP",
+  "props": [
+   {
+    "p": "payload"
+   }
+  ],
+  "payload": "{\"cmd\":\"TRIP\",\"reason\":\"manual\"}",
+  "payloadType": "json",
+  "x": 150,
+  "y": 400,
+  "wires": [
+   [
+    "cmd"
+   ]
+  ]
+ }
+]

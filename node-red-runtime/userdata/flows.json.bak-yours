@@ -1,0 +1,104 @@
+[
+    {
+        "id": "vgi_tab",
+        "type": "tab",
+        "label": "VoltGuard Ingest (MQTT to backend)",
+        "disabled": false,
+        "info": "Env: VOLTGUARD_BACKEND_URL, VOLTGUARD_INGEST_TOKEN, VOLTGUARD_DEVICE_ID"
+    },
+    {
+        "id": "vgi_broker",
+        "type": "mqtt-broker",
+        "name": "Mosquitto 192.168.29.46",
+        "broker": "192.168.29.46",
+        "port": "1883",
+        "clientid": "voltguard-nodered-ingest",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true
+    },
+    {
+        "id": "vg_mqtt_broker_001",
+        "type": "mqtt-broker",
+        "name": "MacBook Mosquitto",
+        "broker": "127.0.0.1",
+        "port": "1883",
+        "clientid": "VoltGuard_NodeRED_Mac",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    },
+    {
+        "id": "vg_mqtt_in_001",
+        "type": "mqtt in",
+        "z": "vgi_tab",
+        "name": "VoltGuard MQTT",
+        "topic": "voltguard/telemetry",
+        "qos": "0",
+        "datatype": "auto-detect",
+        "broker": "vg_mqtt_broker_001",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 260,
+        "y": 220,
+        "wires": [
+            [
+                "vg_json_001"
+            ]
+        ]
+    },
+    {
+        "id": "vg_json_001",
+        "type": "json",
+        "z": "vgi_tab",
+        "name": "Parse JSON",
+        "property": "payload",
+        "action": "obj",
+        "pretty": false,
+        "x": 480,
+        "y": 220,
+        "wires": [
+            [
+                "vg_debug_001"
+            ]
+        ]
+    },
+    {
+        "id": "vg_debug_001",
+        "type": "debug",
+        "z": "vgi_tab",
+        "name": "VoltGuard Telemetry",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 710,
+        "y": 220,
+        "wires": []
+    }
+]

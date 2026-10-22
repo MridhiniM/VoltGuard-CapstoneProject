@@ -1,0 +1,12 @@
+@tailwind base;@tailwind components;@tailwind utilities;
+body{margin:0;background:#060d18;color:#e6edf7;font-family:"Saira Semi Condensed",system-ui,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+.panel{background:#0d1829;border:1px solid #1c2c46;border-radius:18px;padding:18px}
+.lbl{font-size:13px;color:#8296b3}
+.num{font-weight:500;letter-spacing:-.01em;line-height:1}
+.tag{font-size:11px;font-weight:600;padding:2px 8px;border:1px dashed;border-radius:999px;white-space:nowrap}
+.chip{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:#cbd5e1;border:1px solid #1c2c46;border-radius:999px;padding:4px 12px}
+.inp{width:100%;background:#08111f;border:1px solid #1c2c46;border-radius:10px;padding:8px 10px;color:#e6edf7}
+.inp:focus-visible,button:focus-visible{outline:2px solid #2dd4bf;outline-offset:2px}
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid #1c2c46;border-radius:999px;padding:7px 14px;font-size:13px;color:#e6edf7}
+.btn:hover{background:#13233b}.btn:disabled{opacity:.4}
+.btn-acc{background:#2dd4bf;color:#04110f;border-color:#2dd4bf;font-weight:600}.btn-acc:hover{background:#5eead4}

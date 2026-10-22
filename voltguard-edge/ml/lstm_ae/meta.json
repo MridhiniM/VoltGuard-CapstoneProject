@@ -1,0 +1,86 @@
+{
+ "version": "LSTM-AE-820d00c5d709",
+ "features": [
+  "voltage",
+  "current",
+  "power",
+  "powerFactor",
+  "frequency",
+  "temperature"
+ ],
+ "window": 30,
+ "step_s": 2.0,
+ "gap_s": 5.0,
+ "consecutive": 3,
+ "mean": [
+  246.44264775638229,
+  0.03385034626696609,
+  8.293487335167404,
+  0.98981785409346,
+  49.97859311261001,
+  31.130472915283427
+ ],
+ "scale": [
+  6.959587784411867,
+  0.002,
+  0.46528963160864895,
+  0.02,
+  0.1,
+  1.3924605011540665
+ ],
+ "threshold": 0.06918079411963554,
+ "report": {
+  "rows": 25307,
+  "span": [
+   "2026-10-19 21:58:51.008000",
+   "2026-10-20 13:32:14.692350"
+  ],
+  "windows": {
+   "train": 20326,
+   "val": 2168,
+   "test": 1883
+  },
+  "threshold": 0.06918079411963554,
+  "threshold_rule": "p99.5 of validation window MSE (scaled space)",
+  "test_false_alarm_single_window": 0.012745618693574084,
+  "test_false_alarm_3_consecutive": 0.010101010101010102,
+  "test_score_percentiles": {
+   "50": 0.024445474579480733,
+   "95": 0.0603358978999662,
+   "99": 0.07078560244351888,
+   "100": 0.07694748723119567
+  },
+  "synthetic_fault_detection_SANITY_CHECK_ONLY": {
+   "voltage_sag_22pct": {
+    "detected_single_window": 1.0,
+    "median_score_over_threshold": 155.73179286791546
+   },
+   "voltage_swell_12pct": {
+    "detected_single_window": 1.0,
+    "median_score_over_threshold": 10.520484481954028
+   },
+   "overcurrent_20x": {
+    "detected_single_window": 1.0,
+    "median_score_over_threshold": 500107.8003064363
+   },
+   "temp_ramp_12C": {
+    "detected_single_window": 1.0,
+    "median_score_over_threshold": 16.204134312098397
+   },
+   "temp_step_8C": {
+    "detected_single_window": 1.0,
+    "median_score_over_threshold": 21.443629568052813
+   },
+   "instability": {
+    "detected_single_window": 1.0,
+    "median_score_over_threshold": 47.009175701459185
+   }
+  },
+  "forward_test_last_20pct_in_time": {
+   "false_alarm_single_window": 0.014121981170691772,
+   "false_alarm_3_consecutive": 0.012489762489762489,
+   "train_voltage_mean": 247.9578266238577,
+   "test_voltage_mean": 241.2441129988147
+  }
+ }
+}
