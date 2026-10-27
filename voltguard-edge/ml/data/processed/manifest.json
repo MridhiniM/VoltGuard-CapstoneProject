@@ -1,0 +1,66 @@
+{
+ "electrical_dataset": {
+  "files": [
+   {
+    "file": "pzem_temperature_measurements_new_YESENEW.xlsx",
+    "rows": 18043
+   },
+   {
+    "file": "pzem_serial_diagnostics.xlsx",
+    "rows": 7264
+   }
+  ],
+  "rows_raw": 25307,
+  "rows_clean": 25306,
+  "cleaning": {
+   "missing_core_values": 0,
+   "out_of_physical_range": 0,
+   "duplicate_timestamps": 0,
+   "load_off_rows": 1
+  },
+  "start": "2026-10-19 21:58:51.008000",
+  "end": "2026-10-20 13:32:14.692000",
+  "timezone": "Asia/Kolkata (logger local time, IST)",
+  "median_interval_s": 2.003,
+  "gaps_over_15s": 1,
+  "largest_gap_min": 25.5,
+  "fault_labels": "none (all rows are normal operation of one ~8 W load)",
+  "ranges": {
+   "voltage": [
+    230.3,
+    255.9
+   ],
+   "current": [
+    0.025,
+    0.036
+   ],
+   "power": [
+    5.2,
+    9.0
+   ],
+   "temperature": [
+    27.88,
+    34.31
+   ]
+  }
+ },
+ "weather_dataset": {
+  "source": "Open-Meteo Historical Weather API (reanalysis)",
+  "url": "https://archive-api.open-meteo.com/v1/archive",
+  "raw_file": "data\\raw\\weather\\open_meteo_archive_12.9716_77.5946_2026-10-19_2026-10-20.json",
+  "location": {
+   "name": "Bengaluru",
+   "latitude": 12.9716,
+   "longitude": 77.5946,
+   "timezone": "Asia/Kolkata"
+  },
+  "rows": 48,
+  "variables": [
+   "temperature_2m",
+   "relative_humidity_2m",
+   "wind_speed_10m",
+   "precipitation",
+   "shortwave_radiation"
+  ]
+ }
+}

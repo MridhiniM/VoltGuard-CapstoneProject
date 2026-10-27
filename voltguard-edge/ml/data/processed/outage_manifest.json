@@ -1,0 +1,41 @@
+{
+ "sites": [
+  "5th phase JP Nagar- Bengaluru",
+  "BTM Layout- Bengaluru [Offline]",
+  "Basaweshwara Nagar- Bengaluru",
+  "Chandra Layout- Bengaluru",
+  "JP Nagar",
+  "Jayanagar- Bengaluru [Offline]",
+  "MCECHS Layout - Bengaluru [Offline]",
+  "MarenHalli- Bengaluru [Offline]",
+  "Rajaji Nagar- Bengaluru",
+  "Ramesh Nagar- Bengaluru",
+  "Srirampura-Bengaluru",
+  "VV Puram - Bengaluru [Offline]",
+  "Yelahanka - Bengaluru"
+ ],
+ "files": [
+  "bengaluru_2014.csv",
+  "bengaluru_2015.csv",
+  "bengaluru_2016a.csv",
+  "bengaluru_2016b.csv",
+  "bengaluru_2017a.csv",
+  "bengaluru_2017b.csv",
+  "bengaluru_2017c.csv",
+  "bengaluru_2018a.csv",
+  "bengaluru_2018b.csv",
+  "bengaluru_2018c.csv"
+ ],
+ "events": 9390,
+ "event_minutes_median": 25.0,
+ "event_minutes_p90": 86.0,
+ "labelled_hours": 36313,
+ "site_hours_at_risk": 240550,
+ "onsets": 8932,
+ "onset_rate_per_site_hour": 0.03713157347744751,
+ "span": [
+  "2014-11-05 17:00:00",
+  "2018-12-31 23:00:00"
+ ],
+ "definition": "onset = >= 5 consecutive minutes at 0 V after supply; runs > 12 h excluded as monitor faults"
+}

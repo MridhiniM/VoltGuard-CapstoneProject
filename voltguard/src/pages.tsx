@@ -2,6 +2,7 @@ import {ReactNode,useMemo,useState} from 'react'
 import {Download,Pause,Play} from 'lucide-react'
 import {DEFAULTS,M,META,Metric,Settings,testConn,validate} from './core'
 import {useApp} from './store'
+import {TodayPanel,WeekPanel} from './forecast'
 import {EventList,Empty,Meter,Panel,RG,Range,SC,SL,SimTag,Spark,Tag,TrendChart,fmtD,fmtT} from './ui'
 
 function Source(){const A=useApp();return A.settings.mode==='sim'?<SimTag/>:<Tag color="#34d399">LIVE · NODE-RED</Tag>}
@@ -54,6 +55,8 @@ export function Overview(){const A=useApp()
   <div className="xl:col-span-7"><Trend/></div>
   <Panel className="xl:col-span-5" title="Fault prediction"><PredBody/></Panel>
   <Panel className="xl:col-span-7" title="Anomaly detection (LSTM)"><AnomalyBody/></Panel>
+  <div className="xl:col-span-12"><TodayPanel/></div>
+  <div className="xl:col-span-12"><WeekPanel/></div>
   <Panel className="xl:col-span-12" title="Recent events"><EventList list={A.events}/></Panel></div>}
 export function Live(){const A=useApp();const f=Math.min(1,A.age/Math.max(5000,(A.settings.mode==='sim'?A.settings.simMs:A.settings.pollMs)*3))
  return <div className="grid gap-4"><Banner/>

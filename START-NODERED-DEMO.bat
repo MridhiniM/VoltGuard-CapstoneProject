@@ -9,6 +9,13 @@ if not exist "voltguard-edge\ml\.venv\Scripts\python.exe" (
 )
 "voltguard-edge\ml\.venv\Scripts\python.exe" -m pip install -r "voltguard-edge\ml\requirements-demo.txt"
 if errorlevel 1 (pause & exit /b 1)
+if not exist "voltguard-edge\ml\data\processed\pzem_readings.csv" (
+  echo Preparing the recorded PZEM dataset for the simulator replay...
+  pushd voltguard-edge\ml
+  ".venv\Scripts\python.exe" prepare_data.py
+  if errorlevel 1 (popd & pause & exit /b 1)
+  popd
+)
 if not exist "voltguard\node_modules" (
   pushd voltguard
   call npm install
@@ -38,10 +45,8 @@ timeout /t 3 /nobreak >nul
 start "" http://localhost:1880
 start "" http://localhost:5173
 echo.
-echo In dashboard System settings choose Live, HTTP polling:
-echo Base URL: http://localhost:1880
-echo Latest path: /api/readings/latest
-echo Clear the optional prediction endpoint (Node-RED already supplies predictions).
+echo Dashboard: http://localhost:5173  (Live: System settings, Node-RED URL http://localhost:1880; weather forecast on the Forecast (ML) page)
+echo Readings: http://localhost:1880/api/readings/latest   Outlook: http://127.0.0.1:5001/api/predict/weekly-outlook
 echo Default input is SIMULATION. Switch Node-RED input mode to hardware after flashing ESP32.
 echo No physical relay is controlled. Do not use as mains protection.
 pause

@@ -1,228 +1,279 @@
 [
-  {
-    "id": "vgi_tab",
-    "type": "tab",
-    "label": "VoltGuard Ingest (MQTT to backend)",
-    "disabled": false,
-    "info": "Env: VOLTGUARD_BACKEND_URL, VOLTGUARD_INGEST_TOKEN, VOLTGUARD_DEVICE_ID"
-  },
-  {
-    "id": "vgi_broker",
-    "type": "mqtt-broker",
-    "name": "Mosquitto (this Mac, 127.0.0.1)",
-    "broker": "127.0.0.1",
-    "port": "1883",
-    "clientid": "voltguard-nodered-ingest",
-    "autoConnect": true,
-    "usetls": false,
-    "protocolVersion": "4",
-    "keepalive": "60",
-    "cleansession": true
-  },
-  {
-    "id": "vgi_in",
-    "type": "mqtt in",
-    "z": "vgi_tab",
-    "name": "voltguard/telemetry",
-    "topic": "voltguard/telemetry",
-    "qos": "0",
-    "datatype": "utf8",
-    "broker": "vgi_broker",
-    "nl": false,
-    "rap": true,
-    "rh": 0,
-    "inputs": 0,
-    "x": 150,
-    "y": 100,
-    "wires": [
-      [
-        "vgi_validate"
-      ]
-    ]
-  },
-  {
-    "id": "vgi_mqttst",
-    "type": "status",
-    "z": "vgi_tab",
-    "name": "MQTT status",
-    "scope": [
-      "vgi_in"
-    ],
-    "x": 150,
-    "y": 200,
-    "wires": [
-      [
-        "vgi_mqttfn"
-      ]
-    ]
-  },
-  {
-    "id": "vgi_mqttfn",
-    "type": "function",
-    "z": "vgi_tab",
-    "name": "record MQTT state",
-    "func": "const s = flow.get('stats') || {};\nconst txt = (msg.status && msg.status.text) || '';\ns.mqtt_connected = /connected/.test(txt) && !/dis/.test(txt); s.mqtt_status = txt; s.mqtt_status_at = new Date().toISOString();\nflow.set('stats', s); return null;",
-    "outputs": 1,
-    "x": 350,
-    "y": 200,
-    "wires": [
-      []
-    ]
-  },
-  {
-    "id": "vgi_validate",
-    "type": "function",
-    "z": "vgi_tab",
-    "name": "parse + validate",
-    "func": "// Parse + validate ESP32 telemetry, build the backend request. Output 1: deliver. Output 2: rejected.\nconst s = flow.get('stats') || {};\nconst bump = k => { s[k] = (s[k] || 0) + 1; };\nbump('mqtt_received'); s.last_mqtt_at = new Date().toISOString();\nconst reject = (why, detail) => { bump('invalid'); s.last_error = why; s.last_error_at = s.last_mqtt_at; flow.set('stats', s);\n  node.warn('rejected telemetry: ' + why + (detail ? ' ' + detail : '')); return [null, { payload: { reason: why, detail } }]; };\nlet p;\n// ESP32 prints NaN/Inf bare (invalid JSON). Map them to null; required numeric fields then fail validation as they should.\nlet raw = Buffer.isBuffer(msg.payload) ? msg.payload.toString('utf8') : String(msg.payload);\nconst fixed = raw.replace(/:\\s*-?(nan|inf|infinity)\\b/gi, ':null');\nif (fixed !== raw) bump('nan_sanitized');\ntry { p = JSON.parse(fixed); }\ncatch (e) { return reject('invalid_json'); }\nif (p === null || typeof p !== 'object' || Array.isArray(p)) return reject('not_an_object');\nconst R = { voltage:[0,500], current:[0,100], power:[-30000,30000], powerFactor:[-1,1], energy:[0,1e9],\n            frequency:[0,100], apparentPower:[0,30000], uptime:[0,2**40] };\nif (p && typeof p === 'object') R.reactivePower = [-30000,30000];\nconst body = {}; const bad = [];\nif (p.reactivePower === null) body.reactivePower = null;   // PZEM cannot always compute it\nfor (const k of Object.keys(R)) {\n  const v = p[k]; if (k === 'reactivePower' && v === null) continue;\n  if (typeof v !== 'number' || !Number.isFinite(v)) bad.push(k + ':type');\n  else if (v < R[k][0] || v > R[k][1]) bad.push(k + ':range');\n  else body[k] = v;\n}\nconst t = p.temperature;\nif (t === null) body.temperature = null;                 // sensor unavailable: keep null, never 0\nelse if (typeof t !== 'number' || !Number.isFinite(t)) bad.push('temperature:type');\nelse if (t < -55 || t > 125) bad.push('temperature:range');\nelse body.temperature = t;\nif (bad.length) return reject('schema', bad.join(','));\nif ((s.in_flight || 0) >= 100) { bump('dropped_backpressure'); flow.set('stats', s); return null; }\nconst token = env.get('VOLTGUARD_INGEST_TOKEN') || '';\nif (!token && !context.get('warned')) { context.set('warned', true); node.warn('VOLTGUARD_INGEST_TOKEN is not set; backend will reject'); }\nconst deviceId = env.get('VOLTGUARD_DEVICE_ID') || 'voltguard-esp32-01';\nconst key = deviceId + ':' + body.uptime + ':' + Date.now();   // fixed per message, reused by every retry\ns.in_flight = (s.in_flight || 0) + 1; flow.set('stats', s);\nmsg.body = body; msg.payload = body; msg.attempt = 0; msg.url = env.get('VOLTGUARD_BACKEND_URL') || 'http://127.0.0.1:5000/api/telemetry';\nmsg.reqHeaders = { 'Content-Type': 'application/json', 'X-API-Key': token, 'Idempotency-Key': key };\nmsg.headers = msg.reqHeaders; msg.requestTimeout = 5000; msg.idemKey = key;\nreturn [msg, null];",
-    "outputs": 2,
-    "x": 370,
-    "y": 100,
-    "wires": [
-      [
-        "vgi_http"
-      ],
-      [
-        "vgi_dbg"
-      ]
-    ]
-  },
-  {
-    "id": "vgi_http",
-    "type": "http request",
-    "z": "vgi_tab",
-    "name": "POST backend /api/telemetry",
-    "method": "POST",
-    "ret": "obj",
-    "paytoqs": "ignore",
-    "url": "",
-    "tls": "",
-    "persist": false,
-    "proxy": "",
-    "insecureHTTPParser": false,
-    "authType": "",
-    "senderr": false,
-    "headers": [],
-    "x": 640,
-    "y": 100,
-    "wires": [
-      [
-        "vgi_result"
-      ]
-    ]
-  },
-  {
-    "id": "vgi_catch",
-    "type": "catch",
-    "z": "vgi_tab",
-    "name": "network errors",
-    "scope": [
-      "vgi_http"
-    ],
-    "uncaught": false,
-    "x": 640,
-    "y": 160,
-    "wires": [
-      [
-        "vgi_result"
-      ]
-    ]
-  },
-  {
-    "id": "vgi_result",
-    "type": "function",
-    "z": "vgi_tab",
-    "name": "classify response / retry",
-    "func": "// Classify the backend response. Output 1: retry (via delay). Output 2: final failure log.\nconst s = flow.get('stats') || {};\nconst fin = k => { s[k] = (s[k] || 0) + 1; s.in_flight = Math.max(0, (s.in_flight || 0) - 1); flow.set('stats', s); };\nconst code = msg.error ? 0 : msg.statusCode;\nif (code === 200 || code === 201) {\n  fin('delivered'); if (msg.payload && msg.payload.duplicate) s.delivered_duplicate = (s.delivered_duplicate || 0) + 1;\n  s.last_delivered_at = new Date().toISOString(); s.backend_ok = true; flow.set('stats', s); return [null, null];\n}\nconst info = code ? 'HTTP ' + code + ' ' + JSON.stringify(msg.payload).slice(0, 200) : 'network: ' + (msg.error && msg.error.message);\nif (code >= 400 && code < 500 && code !== 408 && code !== 429) {      // permanent: retrying cannot help\n  fin('rejected_by_backend'); s.last_error = info; s.last_error_at = new Date().toISOString(); flow.set('stats', s);\n  node.warn('backend rejected telemetry (' + info + ')'); return [null, { payload: { reason: 'backend_rejected', detail: info } }];\n}\ns.backend_ok = false;\nmsg.attempt = (msg.attempt || 0) + 1;\nif (msg.attempt > 3) { fin('delivery_failed'); s.last_error = info; s.last_error_at = new Date().toISOString(); flow.set('stats', s);\n  node.warn('backend delivery gave up after 3 retries (' + info + ')'); return [null, { payload: { reason: 'delivery_failed', detail: info } }]; }\ns.retries = (s.retries || 0) + 1; flow.set('stats', s);\nmsg.delay = Math.min(500 * 2 ** (msg.attempt - 1), 4000);\ndelete msg.error; delete msg.statusCode;\nmsg.payload = msg.body; msg.headers = msg.reqHeaders;                  // http request overwrote both\nreturn [msg, null];",
-    "outputs": 2,
-    "x": 880,
-    "y": 100,
-    "wires": [
-      [
-        "vgi_delay"
-      ],
-      [
-        "vgi_dbg"
-      ]
-    ]
-  },
-  {
-    "id": "vgi_delay",
-    "type": "delay",
-    "z": "vgi_tab",
-    "name": "backoff (msg.delay)",
-    "pauseType": "delayv",
-    "timeout": "1",
-    "timeoutUnits": "seconds",
-    "rate": "1",
-    "nbRateUnits": "1",
-    "rateUnits": "second",
-    "randomFirst": "1",
-    "randomLast": "5",
-    "randomUnits": "seconds",
-    "drop": false,
-    "allowrate": false,
-    "outputs": 1,
-    "x": 880,
-    "y": 200,
-    "wires": [
-      [
-        "vgi_http"
-      ]
-    ]
-  },
-  {
-    "id": "vgi_dbg",
-    "type": "debug",
-    "z": "vgi_tab",
-    "name": "ingest problems",
-    "active": true,
-    "tosidebar": true,
-    "complete": "payload",
-    "x": 640,
-    "y": 260,
-    "wires": []
-  },
-  {
-    "id": "vgi_stin",
-    "type": "http in",
-    "z": "vgi_tab",
-    "name": "GET /voltguard/ingest-status",
-    "url": "/voltguard/ingest-status",
-    "method": "get",
-    "swaggerDoc": "",
-    "x": 170,
-    "y": 340,
-    "wires": [
-      [
-        "vgi_stfn"
-      ]
-    ]
-  },
-  {
-    "id": "vgi_stfn",
-    "type": "function",
-    "z": "vgi_tab",
-    "name": "status",
-    "func": "const s = flow.get('stats') || {};\nconst age = x => x ? Math.round((Date.now() - Date.parse(x)) / 1000) : null;\nmsg.payload = Object.assign({}, s, { mqtt_last_age_s: age(s.last_mqtt_at), delivered_last_age_s: age(s.last_delivered_at),\n  note: 'mqtt_received counts broker messages only; \"delivered\" counts backend-confirmed (stored) readings.' });\nmsg.headers = { 'Cache-Control': 'no-store' }; return msg;",
-    "outputs": 1,
-    "x": 420,
-    "y": 340,
-    "wires": [
-      [
-        "vgi_stres"
-      ]
-    ]
-  },
-  {
-    "id": "vgi_stres",
-    "type": "http response",
-    "z": "vgi_tab",
-    "name": "",
-    "statusCode": "",
-    "headers": {},
-    "x": 620,
-    "y": 340,
-    "wires": []
-  }
+ {
+  "id": "vg_tab",
+  "type": "tab",
+  "label": "VoltGuard SIM → ML → Dashboard"
+ },
+ {
+  "id": "tick",
+  "type": "inject",
+  "z": "vg_tab",
+  "name": "Poll simulated ESP32 every 2 seconds",
+  "props": [
+   {
+    "p": "payload"
+   }
+  ],
+  "repeat": "2",
+  "once": true,
+  "onceDelay": 1,
+  "payload": "",
+  "payloadType": "str",
+  "x": 180,
+  "y": 100,
+  "wires": [
+   [
+    "raw"
+   ]
+  ]
+ },
+ {
+  "id": "raw",
+  "type": "http request",
+  "z": "vg_tab",
+  "name": "Simulator raw telemetry",
+  "method": "GET",
+  "ret": "obj",
+  "paytoqs": "ignore",
+  "url": "http://127.0.0.1:5001/api/demo/raw",
+  "x": 410,
+  "y": 100,
+  "wires": [
+   [
+    "prep"
+   ]
+  ]
+ },
+ {
+  "id": "prep",
+  "type": "function",
+  "z": "vg_tab",
+  "name": "Validate and forward to ML",
+  "func": "if(flow.get('input_mode')==='hardware')return null; const p=msg.payload; if(!p || !['voltage','current','temperature'].every(k=>Number.isFinite(p[k]))) {node.warn('Invalid simulator reading');return null;} msg.payload=p; msg.headers={'Content-Type':'application/json'}; return msg;",
+  "outputs": 1,
+  "x": 660,
+  "y": 100,
+  "wires": [
+   [
+    "ml"
+   ]
+  ]
+ },
+ {
+  "id": "ml",
+  "type": "http request",
+  "z": "vg_tab",
+  "name": "Flask Random Forest + hard rules",
+  "method": "POST",
+  "ret": "obj",
+  "paytoqs": "ignore",
+  "url": "http://127.0.0.1:5001/api/edge/predict",
+  "x": 930,
+  "y": 100,
+  "wires": [
+   [
+    "save"
+   ]
+  ]
+ },
+ {
+  "id": "save",
+  "type": "function",
+  "z": "vg_tab",
+  "name": "Publish latest processed reading",
+  "func": "if(msg.statusCode!==200 || !msg.payload || !msg.payload.prediction){node.warn('ML gateway returned error');return null;} const p=msg.payload; const mode=flow.get('input_mode')||'simulation';if((mode==='hardware')!==(!p.sim))return null; p.pipeline=mode==='hardware'?'ESP32 → MQTT → NODE-RED → FLASK ML → NODE-RED':'SIMULATOR → NODE-RED → FLASK ML → NODE-RED';p.input_mode=mode;p.received_at=new Date().toISOString();flow.set('latest',p);if(mode==='hardware')flow.set('hardware_at',p.received_at);return msg;",
+  "outputs": 1,
+  "x": 1200,
+  "y": 100,
+  "wires": [
+   [
+    "debug"
+   ]
+  ]
+ },
+ {
+  "id": "debug",
+  "type": "debug",
+  "z": "vg_tab",
+  "name": "ML processed reading",
+  "active": false,
+  "complete": "payload",
+  "x": 1450,
+  "y": 100,
+  "wires": []
+ },
+ {
+  "id": "http",
+  "type": "http in",
+  "z": "vg_tab",
+  "name": "Dashboard latest reading",
+  "url": "/api/readings/latest",
+  "method": "get",
+  "x": 200,
+  "y": 240,
+  "wires": [
+   [
+    "latest"
+   ]
+  ]
+ },
+ {
+  "id": "latest",
+  "type": "function",
+  "z": "vg_tab",
+  "name": "Latest from Node-RED",
+  "func": "msg.headers={'Access-Control-Allow-Origin':'*','Cache-Control':'no-store'};const p=flow.get('latest');if(!p){msg.statusCode=503;msg.payload={error:'waiting for first processed reading',mode:flow.get('input_mode')||'simulation'};return msg;}if(Date.now()-Date.parse(p.received_at||p.timestamp)>12000){msg.statusCode=503;msg.payload={error:'stale telemetry - sensor input disconnected',mode:flow.get('input_mode')||'simulation'};return msg;}msg.payload=p;return msg;",
+  "outputs": 1,
+  "x": 470,
+  "y": 240,
+  "wires": [
+   [
+    "response"
+   ]
+  ]
+ },
+ {
+  "id": "response",
+  "type": "http response",
+  "z": "vg_tab",
+  "name": "Dashboard JSON",
+  "x": 720,
+  "y": 240,
+  "wires": []
+ },
+ {
+  "id": "err",
+  "type": "catch",
+  "z": "vg_tab",
+  "name": "Pipeline errors",
+  "scope": [],
+  "uncaught": false,
+  "x": 200,
+  "y": 330,
+  "wires": [
+   [
+    "errdbg"
+   ]
+  ]
+ },
+ {
+  "id": "errdbg",
+  "type": "debug",
+  "z": "vg_tab",
+  "name": "Pipeline errors",
+  "active": true,
+  "complete": "true",
+  "x": 440,
+  "y": 330,
+  "wires": []
+ },
+ {
+  "id": "vg_mqtt_broker",
+  "type": "mqtt-broker",
+  "name": "VoltGuard local broker",
+  "broker": "127.0.0.1",
+  "port": "1883",
+  "clientid": "voltguard-nodered",
+  "autoConnect": true,
+  "usetls": false,
+  "protocolVersion": "4",
+  "keepalive": "60",
+  "cleansession": true
+ },
+ {
+  "id": "vg_mqtt_in",
+  "type": "mqtt in",
+  "z": "vg_tab",
+  "name": "ESP32 actual telemetry",
+  "topic": "voltguard/telemetry",
+  "qos": "0",
+  "datatype": "json",
+  "broker": "vg_mqtt_broker",
+  "nl": false,
+  "rap": true,
+  "rh": 0,
+  "inputs": 0,
+  "x": 185,
+  "y": 410,
+  "wires": [
+   [
+    "vg_hw_gate"
+   ]
+  ]
+ },
+ {
+  "id": "vg_hw_gate",
+  "type": "function",
+  "z": "vg_tab",
+  "name": "Hardware mode + sensor validation",
+  "func": "if(flow.get('input_mode')!=='hardware')return null; const p=msg.payload; if(!p || p.sensor_ok===false || !['voltage','current','temperature'].every(k=>typeof p[k]==='number' && Number.isFinite(p[k]))) {node.warn('ESP32 invalid sensor reading');return null;} if(p.voltage<0||p.voltage>300||p.current<0||p.current>100||p.temperature< -55||p.temperature>125){node.warn('ESP32 out-of-range telemetry');return null;} msg.payload={voltage:p.voltage,current:p.current,temperature:p.temperature,power:(typeof p.power==='number'&&Number.isFinite(p.power))?p.power:undefined,powerFactor:p.powerFactor,frequency:p.frequency,source:'ESP32',sim:false,scenario:'hardware',sensor_ok:p.sensor_ok!==false,hardware_relay:p.relay,trip_reason:p.trip_reason,edge_label:p.edge_label,timestamp:new Date().toISOString()};msg.headers={'Content-Type':'application/json'};return msg;",
+  "outputs": 1,
+  "x": 465,
+  "y": 410,
+  "wires": [
+   [
+    "ml"
+   ]
+  ]
+ },
+ {
+  "id": "vg_mode_http",
+  "type": "http in",
+  "z": "vg_tab",
+  "name": "Read input mode",
+  "url": "/api/input/mode",
+  "method": "get",
+  "x": 170,
+  "y": 510,
+  "wires": [
+   [
+    "vg_mode_reply"
+   ]
+  ]
+ },
+ {
+  "id": "vg_mode_reply",
+  "type": "function",
+  "z": "vg_tab",
+  "name": "Mode and hardware status",
+  "func": "msg.headers={'Access-Control-Allow-Origin':'*','Cache-Control-Allow-Methods':'GET, POST, OPTIONS','Access-Control-Allow-Headers':'Content-Type','Cache-Control':'no-store'}; msg.payload={mode:flow.get('input_mode')||'simulation',last_hardware_at:flow.get('hardware_at')||null};return msg;",
+  "outputs": 1,
+  "x": 440,
+  "y": 510,
+  "wires": [
+   [
+    "response"
+   ]
+  ]
+ },
+ {
+  "id": "vg_mode_post",
+  "type": "http in",
+  "z": "vg_tab",
+  "name": "Set input mode",
+  "url": "/api/input/mode",
+  "method": "post",
+  "x": 175,
+  "y": 570,
+  "wires": [
+   [
+    "vg_mode_set"
+   ]
+  ]
+ },
+ {
+  "id": "vg_mode_set",
+  "type": "function",
+  "z": "vg_tab",
+  "name": "Select simulation or hardware",
+  "func": "const mode=msg.payload && msg.payload.mode;msg.headers={'Access-Control-Allow-Origin':'*','Cache-Control-Allow-Headers':'Content-Type','Cache-Control-Allow-Methods':'GET, POST, OPTIONS','Cache-Control':'no-store'};if(!['simulation','hardware'].includes(mode)){msg.statusCode=400;msg.payload={error:'mode must be simulation or hardware'};return msg;}flow.set('input_mode',mode);flow.set('latest',null);msg.payload={ok:true,mode:mode,notice:'Mode changed. Awaiting fresh readings.'};return msg;",
+  "outputs": 1,
+  "x": 475,
+  "y": 570,
+  "wires": [
+   [
+    "response"
+   ]
+  ]
+ }
 ]

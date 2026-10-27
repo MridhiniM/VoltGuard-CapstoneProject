@@ -1,0 +1,395 @@
+{
+ "generated_at": "2026-10-27T05:58:16+00:00",
+ "data": {
+  "electrical_dataset": {
+   "files": [
+    {
+     "file": "pzem_temperature_measurements_new_YESENEW.xlsx",
+     "rows": 18043
+    },
+    {
+     "file": "pzem_serial_diagnostics.xlsx",
+     "rows": 7264
+    }
+   ],
+   "rows_raw": 25307,
+   "rows_clean": 25306,
+   "cleaning": {
+    "missing_core_values": 0,
+    "out_of_physical_range": 0,
+    "duplicate_timestamps": 0,
+    "load_off_rows": 1
+   },
+   "start": "2026-10-19 21:58:51.008000",
+   "end": "2026-10-20 13:32:14.692000",
+   "timezone": "Asia/Kolkata (logger local time, IST)",
+   "median_interval_s": 2.003,
+   "gaps_over_15s": 1,
+   "largest_gap_min": 25.5,
+   "fault_labels": "none (all rows are normal operation of one ~8 W load)",
+   "ranges": {
+    "voltage": [
+     230.3,
+     255.9
+    ],
+    "current": [
+     0.025,
+     0.036
+    ],
+    "power": [
+     5.2,
+     9.0
+    ],
+    "temperature": [
+     27.88,
+     34.31
+    ]
+   }
+  },
+  "weather_dataset": {
+   "source": "Open-Meteo Historical Weather API (reanalysis)",
+   "url": "https://archive-api.open-meteo.com/v1/archive",
+   "raw_file": "data\\raw\\weather\\open_meteo_archive_12.9716_77.5946_2026-10-19_2026-10-20.json",
+   "location": {
+    "name": "Bengaluru",
+    "latitude": 12.9716,
+    "longitude": 77.5946,
+    "timezone": "Asia/Kolkata"
+   },
+   "rows": 48,
+   "variables": [
+    "temperature_2m",
+    "relative_humidity_2m",
+    "wind_speed_10m",
+    "precipitation",
+    "shortwave_radiation"
+   ]
+  }
+ },
+ "splits": {
+  "val_start": "2026-10-20 08:52:13.586800",
+  "test_start": "2026-10-20 11:12:14.139400"
+ },
+ "anomaly_detector": {
+  "selected": "robust_covariance",
+  "selection_rule": "highest mean row-detection on synthetic injections into VALIDATION data, at the p99.5 validation threshold",
+  "features": [
+   "voltage",
+   "current",
+   "power",
+   "temperature",
+   "v_dev",
+   "i_std",
+   "p_std",
+   "t_rate"
+  ],
+  "split": "interleaved 30-min blocks 5:1:1 (train:val:test), 5-min purge at val/test block starts",
+  "rows": {
+   "train": 18739,
+   "val": 2765,
+   "test": 2699
+  },
+  "threshold": {
+   "value": 118.03374636216469,
+   "rule": "p99.5 of validation scores (target ~0.5% false alarms on normal data)"
+  },
+  "candidates": {
+   "isolation_forest": {
+    "val_selection_score": 0.492,
+    "false_alarm_rate": {
+     "train": 0.003948983403596777,
+     "val": 0.005063291139240506,
+     "test": 0.0014820303816228233
+    },
+    "forward_in_time_test_false_alarm_rate": 0.0,
+    "test_injections": {
+     "voltage_sag": {
+      "blocks": 20,
+      "block_detection_rate": 1.0,
+      "mean_row_detection_rate": 0.5366666666666667,
+      "block_detection_rate_zscore_baseline": 1.0
+     },
+     "voltage_swell": {
+      "blocks": 20,
+      "block_detection_rate": 0.9,
+      "mean_row_detection_rate": 0.23416666666666663,
+      "block_detection_rate_zscore_baseline": 0.6
+     },
+     "overcurrent": {
+      "blocks": 20,
+      "block_detection_rate": 1.0,
+      "mean_row_detection_rate": 0.8266666666666665,
+      "block_detection_rate_zscore_baseline": 1.0
+     },
+     "thermal_runaway": {
+      "blocks": 20,
+      "block_detection_rate": 0.6,
+      "mean_row_detection_rate": 0.029166666666666667,
+      "block_detection_rate_zscore_baseline": 1.0
+     },
+     "unstable_load": {
+      "blocks": 20,
+      "block_detection_rate": 1.0,
+      "mean_row_detection_rate": 0.7575,
+      "block_detection_rate_zscore_baseline": 1.0
+     }
+    },
+    "score_percentiles_test": {
+     "50": 0.4593,
+     "90": 0.5202,
+     "99": 0.5872,
+     "99.9": 0.6257
+    },
+    "threshold": 0.6164238125193104
+   },
+   "robust_covariance": {
+    "val_selection_score": 0.8023333333333333,
+    "false_alarm_rate": {
+     "train": 0.0014942099364960778,
+     "val": 0.005063291139240506,
+     "test": 0.011115227862171175
+    },
+    "forward_in_time_test_false_alarm_rate": 0.00715648854961832,
+    "test_injections": {
+     "voltage_sag": {
+      "blocks": 20,
+      "block_detection_rate": 1.0,
+      "mean_row_detection_rate": 1.0,
+      "block_detection_rate_zscore_baseline": 1.0
+     },
+     "voltage_swell": {
+      "blocks": 20,
+      "block_detection_rate": 1.0,
+      "mean_row_detection_rate": 0.46499999999999997,
+      "block_detection_rate_zscore_baseline": 0.6
+     },
+     "overcurrent": {
+      "blocks": 20,
+      "block_detection_rate": 1.0,
+      "mean_row_detection_rate": 1.0,
+      "block_detection_rate_zscore_baseline": 1.0
+     },
+     "thermal_runaway": {
+      "blocks": 20,
+      "block_detection_rate": 0.95,
+      "mean_row_detection_rate": 0.5608333333333334,
+      "block_detection_rate_zscore_baseline": 1.0
+     },
+     "unstable_load": {
+      "blocks": 20,
+      "block_detection_rate": 1.0,
+      "mean_row_detection_rate": 0.9991666666666668,
+      "block_detection_rate_zscore_baseline": 1.0
+     }
+    },
+    "score_percentiles_test": {
+     "50": 8.0373,
+     "90": 18.2906,
+     "99": 1746.3079,
+     "99.9": 1865.3669
+    },
+    "threshold": 118.03374636216469
+   }
+  },
+  "zscore_baseline_false_alarm_rate": {
+   "val": 0.0,
+   "test": 0.0003705075954057058
+  },
+  "seed_stability_test_flag_agreement": [
+   1.0,
+   1.0,
+   1.0,
+   1.0
+  ],
+  "notes": [
+   "No real fault labels exist, so precision/recall on real faults cannot be computed.",
+   "Injection results are a sanity check with artificial perturbations, not validation.",
+   "Forward-in-time false alarms are high because mains voltage drifts below the earlier range (to ~234 V) late in the log: the detector only knows the conditions it has seen.",
+   "Anomaly scores are relative unusualness, not probabilities of failure."
+  ]
+ },
+ "temperature_nowcast": {
+  "target": "equipment temperature (1-min mean) 30 min ahead",
+  "history_needed_min": 10,
+  "rows": {
+   "train": 615,
+   "val": 70,
+   "test": 110
+  },
+  "baseline_persistence": {
+   "val": {
+    "mae": 0.3371426162061387,
+    "rmse": 0.4495525984527067
+   },
+   "test": {
+    "mae": 0.6297051201671892,
+    "rmse": 0.7556310281556965
+   }
+  },
+  "candidates": {
+   "electrical:ridge": {
+    "val": {
+     "mae": 2.3210242870474027,
+     "rmse": 2.3486837465849866
+    },
+    "test": {
+     "mae": 0.7190155164372622,
+     "rmse": 0.8621266803884973
+    }
+   },
+   "electrical:random_forest": {
+    "val": {
+     "mae": 0.9066412169994821,
+     "rmse": 0.9748378668435576
+    },
+    "test": {
+     "mae": 0.6106336355553236,
+     "rmse": 0.7219210505202058
+    }
+   },
+   "electrical:gradient_boosting": {
+    "val": {
+     "mae": 0.9534417098067416,
+     "rmse": 1.0270775603378717
+    },
+    "test": {
+     "mae": 0.6043361869374985,
+     "rmse": 0.712902038449565
+    }
+   },
+   "electrical+weather:ridge": {
+    "val": {
+     "mae": 1.9260926287789017,
+     "rmse": 1.9471521671329857
+    },
+    "test": {
+     "mae": 0.727778346080241,
+     "rmse": 0.9020823431697277
+    }
+   },
+   "electrical+weather:random_forest": {
+    "val": {
+     "mae": 1.4274614112203945,
+     "rmse": 1.464163409978889
+    },
+    "test": {
+     "mae": 0.6078443430087432,
+     "rmse": 0.7432489023389914
+    }
+   },
+   "electrical+weather:gradient_boosting": {
+    "val": {
+     "mae": 0.26565549753633555,
+     "rmse": 0.30026926638225127
+    },
+    "test": {
+     "mae": 0.5929957510562555,
+     "rmse": 0.7233588717527514
+    }
+   }
+  },
+  "selected_by_validation_mae": {
+   "electrical": "electrical:random_forest",
+   "electrical+weather": "electrical+weather:gradient_boosting"
+  },
+  "selected_test": {
+   "electrical": {
+    "test": {
+     "mae": 0.6106336355553236,
+     "rmse": 0.7219210505202058
+    },
+    "beats_persistence_on_test": true
+   },
+   "electrical+weather": {
+    "test": {
+     "mae": 0.5929957510562555,
+     "rmse": 0.7233588717527514
+    },
+    "beats_persistence_on_test": true
+   }
+  },
+  "weather_helps_on_test": true,
+  "notes": [
+   "Training uses Open-Meteo reanalysis as a stand-in for the forecast that would be available live.",
+   "Only ~15.5 h of data (one partial day); the test period is midday, warmer than most training data.",
+   "Improvements over persistence are small and come from one ~2-hour test window; a difference of a few hundredths of a degree between the electrical and weather variants is not evidence that weather helps."
+  ]
+ },
+ "temperature_vs_ambient": {
+  "target": "equipment temperature (10-min mean) as a function of 3-h mean ambient temperature and load power",
+  "rows": {
+   "train": 67,
+   "val": 13,
+   "test": 14
+  },
+  "results": {
+   "baseline_train_mean": {
+    "val": {
+     "mae": 2.1668134132169192,
+     "rmse": 2.258010575267687
+    },
+    "test": {
+     "mae": 2.8375655723549977,
+     "rmse": 2.8687107904133655
+    }
+   },
+   "linear:amb_3h": {
+    "val": {
+     "mae": 2.311818406051425,
+     "rmse": 2.406884783185863
+    },
+    "test": {
+     "mae": 0.4403657206932238,
+     "rmse": 0.5632224526019729
+    },
+    "coefficients": {
+     "amb_3h": 0.47372130437727406
+    },
+    "intercept": 19.801859968107806
+   },
+   "linear:amb_3h+power": {
+    "val": {
+     "mae": 2.3865460397700735,
+     "rmse": 2.4556052174767493
+    },
+    "test": {
+     "mae": 0.34328078539693657,
+     "rmse": 0.43173199842477994
+    },
+    "coefficients": {
+     "amb_3h": 0.5505223693654108,
+     "power": 0.3297828349032503
+    },
+    "intercept": 15.338164060295284
+   }
+  },
+  "selected": "linear:amb_3h",
+  "beats_baseline_on_test": true,
+  "deployed_for_outlook": true,
+  "training_ambient_range_c": [
+   20.866666666666664,
+   28.1
+  ],
+  "training_equipment_temp_range_c": [
+   27.905000000000005,
+   33.975100000000005
+  ],
+  "val_beats_baseline": false,
+  "notes": [
+   "One diurnal cycle only: ambient is confounded with time-of-day and any slow drift.",
+   "The train-only fit does not beat the mean baseline on the validation period; it beats it on test only after refitting on train+val. Treat outlook temperatures as low-confidence.",
+   "Extrapolation beyond the training ambient range is flagged in the outlook."
+  ]
+ },
+ "fault_prediction": {
+  "trained": false,
+  "reason": "Not possible: neither the real PZEM logs nor any accessible matching public dataset contain confirmed, timestamped fault events for this equipment. The repository's `dataset.csv` labels are synthetic and derived from injected patterns, so a 'fault within 24 h' classifier trained on them would not be evidence of real fault prediction. Required: logged real faults (type + timestamp) from the monitored equipment over weeks/months."
+ },
+ "limitations": [
+  "Single ~8 W resistive load, one site, ~15.5 hours (one partial diurnal cycle).",
+  "No real faults observed; anomaly detection is validated only on normal data plus synthetic injections.",
+  "Weather is reanalysis at city scale, not an indoor sensor at the equipment.",
+  "Future electrical load is unknown; the outlook assumes the median observed load operates continuously."
+ ],
+ "deployment_suitability": "Demonstration / advisory only. Suitable for flagging readings that differ from the recorded normal behaviour of this one load. Not a protective device and not validated for other loads, seasons or sites; retrain when more data (especially real faults) is logged."
+}
